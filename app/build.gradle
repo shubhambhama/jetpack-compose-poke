@@ -95,5 +95,8 @@ dependencies {
     // Kotlin Extensions and Coroutines support for Room
     implementation "androidx.room:room-ktx:2.3.0"
 
+
+    implementation 'androidx.palette:palette:1.0.0'
+
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.0"))
 }

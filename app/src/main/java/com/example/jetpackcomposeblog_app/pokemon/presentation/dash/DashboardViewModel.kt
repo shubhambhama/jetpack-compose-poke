@@ -1,9 +1,14 @@
 package com.example.jetpackcomposeblog_app.pokemon.presentation.dash
 
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.palette.graphics.Palette
 import com.example.jetpackcomposeblog_app.pokemon.data.Response
 import com.example.jetpackcomposeblog_app.pokemon.data.constants.ApiConstant
 import com.example.jetpackcomposeblog_app.pokemon.domain.model.PokemonData
@@ -47,5 +52,14 @@ class DashboardViewModel @Inject constructor(private val respository: DashboardR
         }
     } else {
         imageUrl.takeLastWhile { it.isDigit() }
+    }
+
+    fun imagePalette(drawable: Drawable, onFinish: (Color) -> Unit) {
+        val bmp = (drawable as BitmapDrawable).bitmap.copy(Bitmap.Config.ARGB_8888, true)
+        Palette.from(bmp).generate { palette ->
+            palette?.dominantSwatch?.rgb?.let { colorValue ->
+                onFinish(Color(colorValue))
+            }
+        }
     }
 }
