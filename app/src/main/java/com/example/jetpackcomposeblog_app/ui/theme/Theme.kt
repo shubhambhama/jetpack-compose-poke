@@ -43,3 +43,8 @@ fun cardBackground(): Color {
     val lightColor = Color.White
     return if (isSystemInDarkTheme()) darkColor else lightColor
 }
+
+@Composable
+fun textColor(): Color {
+    return if (isSystemInDarkTheme()) Color.White else Color.Black
+}

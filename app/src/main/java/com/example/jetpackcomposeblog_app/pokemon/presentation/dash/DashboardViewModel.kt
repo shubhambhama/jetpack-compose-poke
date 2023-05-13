@@ -23,11 +23,15 @@ class DashboardViewModel @Inject constructor(private val respository: DashboardR
     private val _pokemonState = mutableStateOf<List<PokemonData>>(emptyList())
     val pokemonState: State<List<PokemonData>> = _pokemonState
 
+    val isLoading = mutableStateOf(false)
+    var loadError = mutableStateOf("")
+
     init {
         getPokemons()
     }
 
-    private fun getPokemons() {
+    fun getPokemons() {
+        isLoading.value = true
         viewModelScope.launch {
             when (val result = respository.getPokemons()) {
                 is Response.Success -> {
@@ -37,10 +41,12 @@ class DashboardViewModel @Inject constructor(private val respository: DashboardR
                     }?.let { pokemonData ->
                         _pokemonState.value += pokemonData
                     }
+                    isLoading.value = false
                 }
 
                 is Response.Error -> {
-
+                    loadError.value = result.message ?: "An unknown error occured"
+                    isLoading.value = false
                 }
             }
         }

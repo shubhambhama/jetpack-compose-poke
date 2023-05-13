@@ -24,16 +24,21 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +69,8 @@ import com.example.jetpackcomposeblog_app.R
 import com.example.jetpackcomposeblog_app.pokemon.domain.model.PokemonData
 import com.example.jetpackcomposeblog_app.pokemon.presentation.dash.DashboardViewModel
 import com.example.jetpackcomposeblog_app.ui.theme.cardBackground
+import com.example.jetpackcomposeblog_app.ui.theme.textColor
+import kotlinx.coroutines.delay
 
 @Composable
 fun PokemonCategoryScreen(navController: NavHostController?) {
@@ -115,6 +122,18 @@ fun TopHeader(onUserProfileClickListener: () -> Unit) {
 fun PokemonCategoryList(viewModel: DashboardViewModel = hiltViewModel(), configuration: Configuration,
                         density: Density, onClickItemListener: (Int) -> Unit) {
     val pokemons = viewModel.pokemonState.value
+    val isLoading by remember { viewModel.isLoading }
+    val loadError by remember { viewModel.loadError }
+
+    val coroutineScope = rememberCoroutineScope()
+    val scrollState = rememberLazyListState()
+
+//    LaunchedEffect(Unit) {
+//        coroutineScope.launch {
+//            scrollState.animateScrollToItem(pokemons.size - 1)
+//        }
+//    }
+
     LazyColumn(contentPadding = PaddingValues(8.dp)) {
         val itemCount = if (pokemons.size % 2 == 0) {
             pokemons.size / 2
@@ -123,6 +142,17 @@ fun PokemonCategoryList(viewModel: DashboardViewModel = hiltViewModel(), configu
         }
         items(itemCount) { pokemonDex ->
             PokemonRow(pokemonDex, pokemons, viewModel, configuration, density)
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (loadError.isNotEmpty()) {
+            RetryView(loadError, isLoading) {
+                viewModel.getPokemons()
+            }
+        }
+        if (isLoading && loadError.isEmpty()) {
+            CircularProgressIndicator(color = MaterialTheme.colors.primary)
         }
     }
 }
@@ -163,7 +193,8 @@ fun PokemonCategory(pokemon: PokemonData, modifier: Modifier, viewModel: Dashboa
                     Text(text = pokemon.name.replaceFirstChar { it.uppercase() }, fontSize = desiredTextSizeSp, textAlign = TextAlign.Center, modifier = Modifier
                             .fillMaxWidth()
                             .padding(4.dp)
-                            .offset(y = -(pokemonImageSize/2)))
+                            .offset(y = -(pokemonImageSize / 2)),
+                            color = textColor())
                 }
             }
         }
@@ -229,5 +260,37 @@ fun CircleImage(image: AsyncImagePainter, pokemonName: String, pokemonImageSize:
                 .fillMaxSize()
                 .padding(4.dp)
                 .align(Alignment.CenterHorizontally))
+    }
+}
+
+@Composable
+fun RetryView(errorMessage: String, isLoading: Boolean, retryAction: () -> Unit) {
+    var isLoadingRetry by remember {
+        mutableStateOf(isLoading)
+    }
+    LaunchedEffect(isLoadingRetry) {
+        if (isLoadingRetry) {
+            delay(5_000)
+            isLoadingRetry = false
+        }
+    }
+
+    Column {
+        Text(text = errorMessage, fontSize = MaterialTheme.typography.h6.fontSize, color = textColor())
+        Box(modifier = Modifier
+                .wrapContentSize()
+                .align(Alignment.CenterHorizontally), contentAlignment = Alignment.Center) {
+            if (isLoadingRetry) {
+                CircularProgressIndicator(color = MaterialTheme.colors.primary, modifier = Modifier.padding(16.dp))
+            } else {
+                Button(onClick = {
+                    isLoadingRetry = true
+                    retryAction()
+                }, modifier = Modifier
+                        .padding(10.dp)) {
+                    Text(text = "Retry", fontSize = MaterialTheme.typography.h6.fontSize)
+                }
+            }
+        }
     }
 }
