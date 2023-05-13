@@ -11,10 +11,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.palette.graphics.Palette
 import com.example.jetpackcomposeblog_app.pokemon.data.Response
 import com.example.jetpackcomposeblog_app.pokemon.data.constants.ApiConstant
+import com.example.jetpackcomposeblog_app.pokemon.domain.model.Pokemon
 import com.example.jetpackcomposeblog_app.pokemon.domain.model.PokemonData
 import com.example.jetpackcomposeblog_app.pokemon.domain.repository.DashboardRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -23,11 +25,32 @@ class DashboardViewModel @Inject constructor(private val respository: DashboardR
     private val _pokemonState = mutableStateOf<List<PokemonData>>(emptyList())
     val pokemonState: State<List<PokemonData>> = _pokemonState
 
+    private val _pokemonDetailState = mutableStateOf<Map<Int, Pokemon>>(mapOf())
+    val pokemonDetailState: State<Map<Int, Pokemon>> = _pokemonDetailState
+
     val isLoading = mutableStateOf(false)
     var loadError = mutableStateOf("")
 
     init {
         getPokemons()
+    }
+
+    fun getPokemonById(pokemonName: String) {
+        viewModelScope.launch {
+            when (val result = respository.getPokemonByName(pokemonName)) {
+                is Response.Success -> {
+                    result.data?.let { pokemon ->
+                        if (!_pokemonDetailState.value.containsKey(pokemon.id)) {
+                            _pokemonDetailState.value += mapOf(pokemon.id to pokemon)
+                        }
+                    }
+                }
+
+                is Response.Error -> {
+                    Timber.e(result.message ?: "An Unknown Error Occured")
+                }
+            }
+        }
     }
 
     fun getPokemons() {
@@ -39,7 +62,7 @@ class DashboardViewModel @Inject constructor(private val respository: DashboardR
                         val id = parseImageUrlForId(item.url)
                         PokemonData(id.toInt(), item.name, "${ApiConstant.POKEMON_IMAGE_URL}$id.png")
                     }?.let { pokemonData ->
-                        _pokemonState.value += pokemonData
+                        _pokemonState.value = pokemonData
                     }
                     isLoading.value = false
                 }

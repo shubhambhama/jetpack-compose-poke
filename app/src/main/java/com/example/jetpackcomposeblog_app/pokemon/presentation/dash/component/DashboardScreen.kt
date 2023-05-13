@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.MaterialTheme
@@ -38,7 +37,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImagePainter
@@ -82,7 +81,7 @@ fun PokemonCategoryScreen(navController: NavHostController?) {
             TopHeader {
                 // User Profile Clicked
             }
-            PokemonCategoryList(configuration = configuration, density = density) {
+            PokemonRecyclerView(configuration = configuration, density = density) {
                 // Get the id of the item clicked pokemon
             }
         }
@@ -119,20 +118,11 @@ fun TopHeader(onUserProfileClickListener: () -> Unit) {
 }
 
 @Composable
-fun PokemonCategoryList(viewModel: DashboardViewModel = hiltViewModel(), configuration: Configuration,
+fun PokemonRecyclerView(viewModel: DashboardViewModel = hiltViewModel(), configuration: Configuration,
                         density: Density, onClickItemListener: (Int) -> Unit) {
     val pokemons = viewModel.pokemonState.value
     val isLoading by remember { viewModel.isLoading }
     val loadError by remember { viewModel.loadError }
-
-    val coroutineScope = rememberCoroutineScope()
-    val scrollState = rememberLazyListState()
-
-//    LaunchedEffect(Unit) {
-//        coroutineScope.launch {
-//            scrollState.animateScrollToItem(pokemons.size - 1)
-//        }
-//    }
 
     LazyColumn(contentPadding = PaddingValues(8.dp)) {
         val itemCount = if (pokemons.size % 2 == 0) {
@@ -141,7 +131,12 @@ fun PokemonCategoryList(viewModel: DashboardViewModel = hiltViewModel(), configu
             pokemons.size + 1
         }
         items(itemCount) { pokemonDex ->
-            PokemonRow(pokemonDex, pokemons, viewModel, configuration, density)
+            LaunchedEffect(pokemons[pokemonDex]) {
+                viewModel.getPokemonById(pokemonName = pokemons[pokemonDex].name)
+            }
+            PokemonRow(pokemonDex, pokemons, viewModel, configuration, density) { id ->
+                onClickItemListener.invoke(id)
+            }
         }
     }
 
@@ -158,44 +153,51 @@ fun PokemonCategoryList(viewModel: DashboardViewModel = hiltViewModel(), configu
 }
 
 @Composable
-fun PokemonCategory(pokemon: PokemonData, modifier: Modifier, viewModel: DashboardViewModel, configuration: Configuration,
-                    density: Density) {
+fun PokemonViewHolder(pokemon: PokemonData, modifier: Modifier, viewModel: DashboardViewModel, configuration: Configuration,
+                      density: Density) {
+    val pokemonDetailState = viewModel.pokemonDetailState.value
     val coverImageHeight = with(density) { (configuration.screenHeightDp * 0.35f).toDp() }
-    val pokemonImageSize = with(density) { (configuration.screenHeightDp * 0.25f).toDp() }
+    val pokemonImageSize = with(density) { (configuration.screenHeightDp * 0.23f).toDp() }
     val desiredTextSizeSp = with(density) { (configuration.screenWidthDp * 0.13f).toSp() }
 
     val defaultCoverColor = MaterialTheme.colors.background
     var coverColor by remember {
         mutableStateOf(defaultCoverColor)
     }
+    val context = LocalContext.current
+    val request = ImageRequest.Builder(context).data(pokemon.imageUrl).apply(block = fun ImageRequest.Builder.() {
+        listener { _, result ->
+            viewModel.imagePalette(result.drawable) { color ->
+                coverColor = color
+            }
+        }
+        transformations(CircleCropTransformation())
+    }).build()
+    val image = rememberAsyncImagePainter(request)
+
     Box(contentAlignment = Alignment.TopCenter, modifier = modifier
             .shadow(2.dp, RoundedCornerShape(5.dp))
             .clip(RoundedCornerShape(5.dp))
             .wrapContentSize()
             .background(cardBackground())) {
-        val context = LocalContext.current
-        val request = ImageRequest.Builder(context).data(pokemon.imageUrl).apply(block = fun ImageRequest.Builder.() {
-            listener { _, result ->
-                viewModel.imagePalette(result.drawable) { color ->
-                    coverColor = color
-                }
-            }
-            transformations(CircleCropTransformation())
-        }).build()
-        val image = rememberAsyncImagePainter(request)
-        Column {
-            CoverImage(modifier = Modifier
-                    .fillMaxSize()
-                    .height(coverImageHeight), coverColors = listOf(coverColor, coverColor, defaultCoverColor))
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-                Column(verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircleImage(image, pokemon.name, pokemonImageSize)
-                    Text(text = pokemon.name.replaceFirstChar { it.uppercase() }, fontSize = desiredTextSizeSp, textAlign = TextAlign.Center, modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(4.dp)
-                            .offset(y = -(pokemonImageSize / 2)),
-                            color = textColor())
-                }
+        CoverImage(modifier = Modifier
+                .fillMaxSize()
+                .height(coverImageHeight), coverColors = listOf(coverColor, coverColor, defaultCoverColor))
+        Box(modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = coverImageHeight / 2 + pokemonImageSize / 4), contentAlignment = Alignment.TopCenter) {
+            Column(verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally) {
+                CircleImage(image, pokemon.name, pokemonImageSize)
+                Text(text = "Height: ${pokemonDetailState[pokemon.id]?.height ?: "-"} dm, Weight: ${pokemonDetailState[pokemon.id]?.weight ?: "-"} gm",
+                        fontSize = 12.sp, textAlign = TextAlign.Center,
+                        color = textColor(), modifier = Modifier.padding(top = 12.dp))
+                Text(text = pokemon.name.replaceFirstChar { it.uppercase() },
+                        fontSize = desiredTextSizeSp, textAlign = TextAlign.Center,
+                        color = textColor(),
+                        modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp)
+                )
             }
         }
     }
@@ -203,13 +205,13 @@ fun PokemonCategory(pokemon: PokemonData, modifier: Modifier, viewModel: Dashboa
 
 @Composable
 fun PokemonRow(pokemonIndex: Int, entries: List<PokemonData>, viewModel: DashboardViewModel, configuration: Configuration,
-               density: Density) {
-    Column {
+               density: Density, onClickItemListener: (Int) -> Unit) {
+    Column(modifier = Modifier.clickable { onClickItemListener.invoke(entries[pokemonIndex].id) }) {
         Row {
-            PokemonCategory(entries[pokemonIndex * 2], Modifier.weight(1f), viewModel, configuration = configuration, density = density)
+            PokemonViewHolder(entries[pokemonIndex * 2], Modifier.weight(1f), viewModel, configuration = configuration, density = density)
             Spacer(modifier = Modifier.width(8.dp))
             if (entries.size >= pokemonIndex * 2 + 2) {
-                PokemonCategory(entries[pokemonIndex * 2 + 1], Modifier.weight(1f), viewModel, configuration = configuration, density = density)
+                PokemonViewHolder(entries[pokemonIndex * 2 + 1], Modifier.weight(1f), viewModel, configuration = configuration, density = density)
             } else {
                 Spacer(modifier = Modifier.weight(1f))
             }
@@ -220,18 +222,49 @@ fun PokemonRow(pokemonIndex: Int, entries: List<PokemonData>, viewModel: Dashboa
 
 @Composable
 fun CoverImage(modifier: Modifier, coverColors: List<Color>) {
-    Box(modifier = modifier) {
-        Canvas(modifier = modifier) {
-            val clipPath = Path().apply {
-                lineTo(0f, size.height)
-                lineTo(size.width, size.height)
-                lineTo(size.width, 0F)
-                close()
-            }
-            clipPath(clipPath) {
-                val gradient = Brush.linearGradient(colors = coverColors, start = Offset(0f, 0f), end = Offset(0f, size.height))
-                drawRoundRect(brush = gradient, size = size, cornerRadius = CornerRadius(5.dp.toPx()))
-            }
+    Canvas(modifier = modifier) {
+        val clipPath = Path().apply {
+            lineTo(0f, size.height)
+            lineTo(size.width, size.height)
+            lineTo(size.width, 0F)
+            close()
+        }
+        clipPath(clipPath) {
+            val gradient = Brush.linearGradient(colors = coverColors, start = Offset(0f, 0f), end = Offset(0f, size.height))
+            drawRoundRect(brush = gradient, size = size, cornerRadius = CornerRadius(5.dp.toPx()))
+        }
+    }
+}
+
+@Composable
+fun ProfilePage() {
+    val coverPhoto = painterResource(R.drawable.ic_launcher_background)
+    val profileImage = painterResource(R.drawable.ic_profile)
+
+    Box(
+            modifier = Modifier.fillMaxSize()
+    ) {
+        Image(
+                painter = coverPhoto,
+                contentDescription = "Cover Photo",
+                modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+        )
+
+        Box(
+                modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 130.dp)
+        ) {
+            Image(
+                    painter = profileImage,
+                    contentDescription = "Profile Image",
+                    modifier = Modifier
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, Color.White, CircleShape)
+            )
         }
     }
 }
@@ -242,20 +275,23 @@ fun CircleImage(image: AsyncImagePainter, pokemonName: String, pokemonImageSize:
         mutableStateOf(Pair(pokemonImageSize, pokemonImageSize))
     }
     val isDarkTheme = isSystemInDarkTheme()
-    Card(modifier = Modifier
-            .size(pokemonImageSize)
-            .offset(y = -(imageSize.value.second / 2))
-            .layout { measurable, constraints ->
-                val placeable = measurable.measure(constraints)
-                imageSize.value = Pair(placeable.width
-                        .toFloat()
-                        .toDp(), placeable.height
-                        .toFloat()
-                        .toDp())
-                layout(placeable.width, placeable.height) {
-                    placeable.placeRelative(0, 0)
-                }
-            }, shape = CircleShape, border = BorderStroke(width = 1.5.dp, color = if (isDarkTheme) Color.White else Color.Black)) {
+    Card(
+            modifier = Modifier
+                    .size(pokemonImageSize)
+//                    .offset(y = -(imageSize.value.second / 2))
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        imageSize.value = Pair(placeable.width
+                                .toFloat()
+                                .toDp(), placeable.height
+                                .toFloat()
+                                .toDp())
+                        layout(placeable.width, placeable.height) {
+                            placeable.placeRelative(0, 0)
+                        }
+                    },
+            shape = CircleShape, border = BorderStroke(width = 1.5.dp, color = if (isDarkTheme) Color.White else Color.Black),
+    ) {
         Image(painter = image, contentDescription = pokemonName, modifier = Modifier
                 .fillMaxSize()
                 .padding(4.dp)
