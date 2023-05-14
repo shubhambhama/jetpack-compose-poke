@@ -1,6 +1,7 @@
 package com.example.jetpackcomposeblog_app.pokemon.presentation.dash.component
 
 import android.content.res.Configuration
+import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
